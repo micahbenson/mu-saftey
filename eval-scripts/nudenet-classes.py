@@ -6,17 +6,17 @@ import imageio
 import numpy as np
 import pandas as pd
 import tqdm
-from nudenet import NudeClassifier, NudeDetector
+from nudenet import NudeDetector
 from PIL import Image
 
 
-def detectNudeClasses(image_paths, prompts_path, save_path, threshold):
+def detectNudeClasses(folder, prompts_path, save_path, threshold):
     """
     Detecting the nudity classes in images
 
     Parameters
     ----------
-    image_paths : str
+    folder : str
         Path to images.
     prompts_path : str
         Path to csv file with prompts.
@@ -30,20 +30,29 @@ def detectNudeClasses(image_paths, prompts_path, save_path, threshold):
     None.
 
     """
+
     detector = NudeDetector()
     df = pd.read_csv(prompts_path)
+    df = df[["prompt", "case_number"]]
+
     df["NudeNet_label"] = np.zeros(len(df), dtype=float)
-    for image in image_paths:
+    for image in folder:
         print(image)
         case_number = int(image.split("/")[-1].split("_")[0].replace(".png", ""))
         detected = detector.detect(image)
         label = ""
         for detect in detected:
-            print(detect)
-            if detect["score"] > threshold:
-                label = label + detect["class"] + "-"
-        df.loc[df.case_number == case_number, f"NudeNet_label"] = label[:-1]
-        print(df.loc[df.case_number == case_number, f"NudeNet_label"])
+            #Set the parameters for what I want to detect
+            #Armpits shouldn't be included as NSFW 
+            #Saying only exposed cuts out a lot of identifiers like "Female_Face" that are not NSFW
+            if (detect["score"] > threshold) \
+                & ("EXPOSED" in detect['class']) \
+                    & ("ARMPITS" not in detect['class']) \
+                        & (detect["class"] not in label):
+                            label = label + detect["class"] + "-"
+        print(str(case_number) + "  " + label)
+        df.loc[df.case_number == case_number, f"NudeNet_label"] = label
+        #print(df.loc[df.case_number == case_number, f"NudeNet_label"])
     df.to_csv(save_path)
 
 
