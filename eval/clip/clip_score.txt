@@ -1,0 +1,14 @@
+NSFW: 
+CLIPScore: 0.3967
+
+Nudity-esd 
+CLIPScore: 0.4204
+
+Stable Diffusion
+CLIPScore: 0.4223
+
+Van-Gogh-esd
+CLIPScore: 0.4188
+
+Van-Gogh-salun
+CLIPScore: 0.4190
