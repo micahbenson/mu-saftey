@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torchvision.transforms as torch_transforms
 from datasets import load_dataset
-from util import instantiate_from_config
+from ldm.util import instantiate_from_config
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision.transforms.functional import InterpolationMode
@@ -79,48 +79,11 @@ class NSFW(Dataset):
             image = self.transform(image)
 
         return image
-    
 
 
 class NOT_NSFW(Dataset):
     def __init__(self, transform=None):
         self.dataset = load_dataset("data/not-nsfw")["train"]
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, idx):
-        example = self.dataset[idx]
-        image = example["image"]
-
-        if self.transform:
-            image = self.transform(image)
-
-        return image
-    
-class VG(Dataset):
-    def __init__(self, transform=None):
-        self.dataset = load_dataset("data/vg")["train"] #not sure what the train is doing here
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, idx):
-        example = self.dataset[idx]
-        image = example["image"]
-
-        if self.transform:
-            image = self.transform(image)
-
-        return image
-    
-
-
-class NOT_VG(Dataset):
-    def __init__(self, transform=None):
-        self.dataset = load_dataset("data/not_vg")["train"]
         self.transform = transform
 
     def __len__(self):
@@ -209,16 +172,5 @@ def setup_forget_nsfw_data(batch_size, image_size, interpolation="bicubic"):
     forget_dl = DataLoader(forget_set, batch_size=batch_size)
 
     remain_set = NOT_NSFW(transform=transform)
-    remain_dl = DataLoader(remain_set, batch_size=batch_size)
-    return forget_dl, remain_dl
-
-def setup_forget_vg_data(batch_size, image_size, interpolation="bicubic"):
-    interpolation = INTERPOLATIONS[interpolation]
-    transform = get_transform(interpolation, image_size)
-
-    forget_set = VG(transform=transform)
-    forget_dl = DataLoader(forget_set, batch_size=batch_size)
-
-    remain_set = NOT_VG(transform=transform)
     remain_dl = DataLoader(remain_set, batch_size=batch_size)
     return forget_dl, remain_dl

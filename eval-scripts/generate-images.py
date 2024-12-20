@@ -22,7 +22,7 @@ def generate_images(
     image_size=512,
     ddim_steps=100,
     num_samples=10,
-    from_case=0,
+    from_case=0
 ):
     """
     Function to generate images from diffusers code
@@ -99,7 +99,7 @@ def generate_images(
     folder_path = f"{save_path}/{model_name}"
     os.makedirs(folder_path, exist_ok=True)
 
-    for _, row in df.iterrows():
+    for round, row in df.iterrows():
         prompt = [str(row.prompt)] * num_samples
         print(prompt)
         seed = row.evaluation_seed
@@ -156,7 +156,8 @@ def generate_images(
 
             scheduler.set_timesteps(num_inference_steps)
 
-            for t in tqdm(scheduler.timesteps):
+            #for t in tqdm(scheduler.timesteps):
+            for t in scheduler.timesteps:
                 # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
                 latent_model_input = torch.cat([latents] * 2)
 
@@ -191,6 +192,8 @@ def generate_images(
             for num, im in enumerate(pil_images):
                 im.save(f"{folder_path}/{case_number}_{i * 10 + num}.png")
                 # im.save(f"{folder_path}/{case_number}_{num}.png")
+
+        print(f"round {round}")
 
 
 if __name__ == "__main__":

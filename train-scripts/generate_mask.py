@@ -2,7 +2,7 @@ import argparse
 import os
 
 import torch
-from dataset import setup_forget_data, setup_forget_nsfw_data, setup_model
+from dataset import setup_forget_data, setup_forget_nsfw_data, setup_model, setup_forget_vg_data
 from tqdm import tqdm
 
 def generate_mask(
@@ -127,7 +127,7 @@ def generate_nsfw_mask(
     model.eval()
     criteria = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.model.diffusion_model.parameters(), lr=lr)
-    word_nude = "a photo of a nude person"
+    word_nude = "a photo of a nude person and a photo in van gogh style"
 
     gradients = {}
     for name, param in model.model.diffusion_model.named_parameters():
@@ -135,6 +135,7 @@ def generate_nsfw_mask(
 
     with tqdm(total=len(train_dl)) as t:
         for i, images in enumerate(train_dl):
+            print(i)
             optimizer.zero_grad()
 
             images = images.to(device)
@@ -209,6 +210,112 @@ def generate_nsfw_mask(
                 start_index += num_elements
 
             torch.save(hard_dict, os.path.join("mask/nude_{}.pt".format(i)))
+
+def generate_vg_mask(
+    c_guidance,
+    batch_size,
+    epochs,
+    lr,
+    config_path,
+    ckpt_path,
+    diffusers_config_path,
+    device,
+    image_size=512,
+    num_timesteps=1000,
+):
+    # MODEL TRAINING SETUP
+    model = setup_model(config_path, ckpt_path, device)
+    train_dl, _ = setup_forget_vg_data(batch_size, image_size)
+
+    model.eval()
+    criteria = torch.nn.MSELoss()
+    optimizer = torch.optim.Adam(model.model.diffusion_model.parameters(), lr=lr)
+    word_nude = "an image in Van Gogh art style"
+
+    gradients = {}
+    for name, param in model.model.diffusion_model.named_parameters():
+        gradients[name] = 0
+
+    with tqdm(total=len(train_dl)) as t:
+        print("starting loop")
+        print(len(train_dl))
+        for i, images in enumerate(train_dl):
+            optimizer.zero_grad()
+
+            print(i)
+            images = images.to(device)
+            t = torch.randint(
+                0, num_timesteps, (images.shape[0],), device=device
+            ).long()
+
+            null_prompts = [""] * batch_size
+            prompts = [word_nude] * batch_size
+
+            forget_batch = {"jpg": images.permute(0, 2, 3, 1), "txt": prompts}
+            null_batch = {"jpg": images.permute(0, 2, 3, 1), "txt": null_prompts}
+
+            forget_input, forget_emb = model.get_input(
+                forget_batch, model.first_stage_key
+            )
+
+            null_input, null_emb = model.get_input(null_batch, model.first_stage_key)
+
+            t = torch.randint(
+                0, model.num_timesteps, (forget_input.shape[0],), device=device
+            ).long()
+            noise = torch.randn_like(forget_input, device=device)
+
+            forget_noisy = model.q_sample(x_start=forget_input, t=t, noise=noise)
+
+            forget_out = model.apply_model(forget_noisy, t, forget_emb)
+            null_out = model.apply_model(forget_noisy, t, null_emb)
+
+            preds = (1 + c_guidance) * forget_out - c_guidance * null_out
+
+            loss = - criteria(noise, preds)
+            loss.backward()
+
+            with torch.no_grad():
+                for name, param in model.model.diffusion_model.named_parameters():
+                    if param.grad is not None:
+                        gradients[name] += param.grad.data.cpu()
+
+    with torch.no_grad():
+        for name in gradients:
+            gradients[name] = torch.abs_(gradients[name])
+
+        threshold_list = [0.5]
+        for i in threshold_list:
+            sorted_dict_positions = {}
+            hard_dict = {}
+
+            # Concatenate all tensors into a single tensor
+            all_elements = - torch.cat([tensor.flatten() for tensor in gradients.values()])
+
+            # Calculate the threshold index for the top 10% elements
+            threshold_index = int(len(all_elements) * i)
+
+            # Calculate positions of all elements
+            positions = torch.argsort(all_elements)
+            ranks = torch.argsort(positions)
+
+            start_index = 0
+            for key, tensor in gradients.items():
+                num_elements = tensor.numel()
+                # tensor_positions = positions[start_index: start_index + num_elements]
+                tensor_ranks = ranks[start_index : start_index + num_elements]
+
+                sorted_positions = tensor_ranks.reshape(tensor.shape)
+                sorted_dict_positions[key] = sorted_positions
+
+                # Set the corresponding elements to 1
+                threshold_tensor = torch.zeros_like(tensor_ranks)
+                threshold_tensor[tensor_ranks < threshold_index] = 1
+                threshold_tensor = threshold_tensor.reshape(tensor.shape)
+                hard_dict[key] = threshold_tensor
+                start_index += num_elements
+            os.makedirs("mask", exist_ok=True)
+            torch.save(hard_dict, os.path.join("mask/vg_{}.pt".format(i)))
 
 
 if __name__ == "__main__":
@@ -292,6 +399,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--nsfw", help="class or nsfw", type=bool, required=False, default=False
     )
+    parser.add_argument(
+        "--vg", help="class or van gogh", type=bool, required=False, default=False
+    )
     args = parser.parse_args()
 
     # classes = [int(d) for d in args.classes.split(',')]
@@ -309,6 +419,19 @@ if __name__ == "__main__":
 
     if args.nsfw:
         generate_nsfw_mask(
+            c_guidance,
+            batch_size,
+            epochs,
+            lr,
+            config_path,
+            ckpt_path,
+            diffusers_config_path,
+            device,
+            image_size,
+            num_timesteps,
+        )
+    elif args.vg: 
+        generate_vg_mask(
             c_guidance,
             batch_size,
             epochs,

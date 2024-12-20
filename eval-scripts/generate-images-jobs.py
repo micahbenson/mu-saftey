@@ -96,10 +96,10 @@ def generate_images(
     unet.to(device)
     torch_device = device
     df = pd.read_csv(prompts_path)
-    start = (id-1)
-    end = start + 1
-    df = df.iloc[start:end, :] #filter df based on the job ID
-
+    start = id - 1
+    end = start + 20
+    df = df.iloc[start:end, :]
+    #df = df.iloc[-2:, :]
     folder_path = f"{save_path}/{model_name}"
     os.makedirs(folder_path, exist_ok=True)
 
@@ -124,7 +124,7 @@ def generate_images(
 
         batch_size = len(prompt)
 
-        for i in range(10):
+        for i in range(1):
             text_input = tokenizer(
                 prompt,
                 padding="max_length",
