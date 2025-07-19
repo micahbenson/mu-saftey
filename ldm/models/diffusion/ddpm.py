@@ -39,7 +39,7 @@ from ldm.util import (
     mean_flat,
 )
 from omegaconf import ListConfig
-from pytorch_lightning.utilities.distributed import rank_zero_only
+from pytorch_lightning.utilities.rank_zero import rank_zero_only
 from torch.optim.lr_scheduler import LambdaLR
 from torchvision.utils import make_grid
 from tqdm import tqdm
@@ -1301,8 +1301,15 @@ class LatentDiffusion(DDPM):
         loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
         loss_dict.update({f"{prefix}/loss_simple": loss_simple.mean()})
 
-        logvar_t = self.logvar[t].to(self.device)
+        #logvar_t = self.logvar[t].to(self.device)
+        t = t.to(self.logvar.device)  # Ensure indices are on the same device as logvar
+        logvar_t = self.logvar[t]
+        # loss = loss_simple / torch.exp(logvar_t) + logvar_t
+        loss_simple = loss_simple.to(self.device)  # Ensure loss_simple is on self.device
+        logvar_t = logvar_t.to(self.device)       # Ensure logvar_t is on self.device
         loss = loss_simple / torch.exp(logvar_t) + logvar_t
+
+
         # loss = loss_simple / torch.exp(self.logvar) + self.logvar
         if self.learn_logvar:
             loss_dict.update({f"{prefix}/loss_gamma": loss.mean()})

@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from convertModels import savemodelDiffusers
 from dataset import (
-    setup_forget_nsfw_data,
+    setup_forget_vg_data,
     setup_model,
 )
 from diffusers import LMSDiscreteScheduler
@@ -30,7 +30,7 @@ def plot_loss(losses, path, word, n=100):
     plt.savefig(path)
 
 
-def nsfw_removal(
+def vg_removal(
     train_method,
     alpha,
     batch_size,
@@ -54,7 +54,7 @@ def nsfw_removal(
         num_train_timesteps=1000,
     )
     criteria = torch.nn.MSELoss()
-    forget_dl, remain_dl = setup_forget_nsfw_data(batch_size, image_size)
+    forget_dl, remain_dl = setup_forget_vg_data(batch_size, image_size)
 
     # choose parameters to train based on train_method
     parameters = []
@@ -75,13 +75,13 @@ def nsfw_removal(
 
     if mask_path:
         mask = torch.load(mask_path)
-        name = f"compvis-nsfw-mask-method_{train_method}-lr_{lr}"
+        name = f"compvis-vg-mask-method_{train_method}-lr_{lr}"
     else:
-        name = f"compvis-nsfw-method_{train_method}-lr_{lr}"
+        name = f"compvis-vg-method_{train_method}-lr_{lr}"
 
     # NSFW Removal
-    word_nude = "a photo of a nude person and a photo in van gogh art style"
-    word_wear = "a photo of a person wearing clothes and a photo in art style"
+    word_nude = "a picture in Van Gogh art style"
+    word_wear = "a picture in art style"
 
     # TRAINING CODE
     for epoch in range(epochs):
@@ -191,7 +191,7 @@ def save_model(
         path = f"{folder_path}/{name}.pt"
     if save_compvis:
         torch.save(model.state_dict(), path)
-
+    print(path)
     if save_diffusers:
         print("Saving Model in Diffusers Format")
         savemodelDiffusers(
@@ -304,7 +304,7 @@ if __name__ == "__main__":
     image_size = args.image_size
     ddim_steps = args.ddim_steps
 
-    nsfw_removal(
+    vg_removal(
         train_method=train_method,
         alpha=alpha,
         batch_size=batch_size,
